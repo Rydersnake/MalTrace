@@ -86,6 +86,22 @@ def get_sections(pe):
         })
     return sections
 
+def get_imports(pe):
+    """List every imported function together with the DLL it comes from."""
+    imports = []
+    if not hasattr(pe, "DIRECTORY_ENTRY_IMPORT"):
+        return imports
+
+    for entry in pe.DIRECTORY_ENTRY_IMPORT:
+        dll_name = entry.dll.decode("utf-8", errors="ignore")
+        for imp in entry.imports:
+            if imp.name:
+                func = imp.name.decode("utf-8", errors="ignore")
+            else:
+                func = f"ordinal_{imp.ordinal}"
+            imports.append({"dll": dll_name, "function": func})
+    return imports
+
 def analyze_pe(path):
     """Entry point: takes a file path, returns a dictionary of results."""
     if not os.path.isfile(path):
@@ -112,6 +128,7 @@ def analyze_pe(path):
     
     result["headers"] = get_headers(pe)
     result["sections"] = get_sections(pe)
+    result["imports"] = get_imports(pe)
     pe.close()
     return result
 
