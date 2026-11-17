@@ -1,5 +1,6 @@
 import os
 import hashlib
+import pefile
 
 
 def calculate_hashes(path):
@@ -20,6 +21,15 @@ def calculate_hashes(path):
         "sha256": sha256.hexdigest(),
     }
 
+def load_pe(path):
+    """Try to parse the file as a PE. Returns (pe_object, error_message)."""
+    try:
+        return pefile.PE(path), None
+    except pefile.PEFormatError:
+        return None, "Not a valid PE file"
+    except PermissionError:
+        return None, "Permission denied reading file"
+
 def analyze_pe(path):
     """Entry point: takes a file path, returns a dictionary of results."""
     if not os.path.isfile(path):
@@ -38,4 +48,28 @@ def analyze_pe(path):
         "size_bytes": os.path.getsize(path),
         "hashes": calculate_hashes(path),
     }
+
+    pe, error = load_pe(path)
+    if error:
+        result["error"] = error
+        return result
+
+    pe.close()
     return result
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
