@@ -31,6 +31,8 @@ def load_pe(path):
         return None, "Not a valid PE file"
     except PermissionError:
         return None, "Permission denied reading file"
+    except (OSError, ValueError) as err:
+        return None, f"Could not read file: {err}"
 
 MACHINE_TYPES = {
     0x14C: "x86 (32-bit)",
@@ -44,7 +46,6 @@ SUBSYSTEMS = {
     2: "Windows GUI",
     3: "Windows Console",
 }
-
 
 def get_headers(pe):
     """Pull the key facts out of the PE headers."""
@@ -102,33 +103,90 @@ def get_imports(pe):
             imports.append({"dll": dll_name, "function": func})
     return imports
 
+STANDARD_SECTIONS = {
+    ".text", ".data", ".rdata", ".pdata", ".xdata", ".idata", ".edata",
+    ".rsrc", ".reloc", ".bss", ".tls", ".didat", "_rdata", ".crt",
+}
+HIGH_ENTROPY = 7.2
+MIN_IMPORTS = 5
+
+
+def get_flags(headers, sections, imports):
+    """Look for signs that a file may be packed, hidden or tampered with."""
+    flags = []
+
+    for s in sections:
+        name = s["name"]
+        if "W" in s["permissions"] and "X" in s["permissions"]:
+            flags.append({"severity": "high",
+                          "reason": f"Section {name} is writable and executable"})
+        if name.upper().startswith("UPX"):
+            flags.append({"severity": "high",
+                          "reason": f"Section name {name} points to the UPX packer"})
+        elif name.lower() not in STANDARD_SECTIONS:
+            flags.append({"severity": "low",
+                          "reason": f"Non-standard section name: {name}"})
+        if s["entropy"] >= HIGH_ENTROPY:
+            flags.append({"severity": "medium",
+                          "reason": f"Section {name} has very high entropy ({s['entropy']})"})
+
+    if headers["compile_timestamp"] == 0:
+        flags.append({"severity": "low", "reason": "Compile timestamp is zero"})
+    if len(imports) < MIN_IMPORTS:
+        flags.append({"severity": "medium",
+                      "reason": f"Only {len(imports)} imports (packed files hide them)"})
+    return flags
+
+
+def entry_point_flag(pe):
+    """Check that the program starts running inside a code section."""
+    rva = pe.OPTIONAL_HEADER.AddressOfEntryPoint
+    if rva == 0:
+        return None  # no entry point, e.g. a resource-only DLL
+    section = pe.get_section_by_rva(rva)
+    if section is None:
+        return {"severity": "medium",
+                "reason": "Entry point is outside every section"}
+    if not section.Characteristics & SCN_EXECUTE:
+        name = section.Name.decode("utf-8", errors="ignore").rstrip("\x00")
+        return {"severity": "high",
+                "reason": f"Entry point is inside a non-executable section ({name})"}
+    return None
+
 def analyze_pe(path):
     """Entry point: takes a file path, returns a dictionary of results."""
     if not os.path.isfile(path):
         return {"error": f"File not found: {path}"}
 
+    try:
+        hashes = calculate_hashes(path)
+    except OSError as err:
+        return {"error": f"Cannot read file: {err}"}
+
     result = {
-        "file_info": {},
+        "file_info": {
+            "name": os.path.basename(path),
+            "size_bytes": os.path.getsize(path),
+            "hashes": hashes,
+        },
         "headers": {},
         "sections": [],
         "imports": [],
         "flags": [],
     }
 
-    result["file_info"] = {
-        "name": os.path.basename(path),
-        "size_bytes": os.path.getsize(path),
-        "hashes": calculate_hashes(path),
-    }
-
     pe, error = load_pe(path)
     if error:
         result["error"] = error
         return result
-    
+
     result["headers"] = get_headers(pe)
     result["sections"] = get_sections(pe)
     result["imports"] = get_imports(pe)
+    result["flags"] = get_flags(result["headers"], result["sections"], result["imports"])
+    entry_flag = entry_point_flag(pe)
+    if entry_flag:
+        result["flags"].append(entry_flag)
     pe.close()
     return result
 
