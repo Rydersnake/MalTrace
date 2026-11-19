@@ -81,6 +81,7 @@ def get_sections(pe):
             "name": section.Name.decode("utf-8", errors="ignore").rstrip("\x00"),
             "virtual_address": hex(section.VirtualAddress),
             "virtual_size": section.Misc_VirtualSize,
+            "raw_offset": section.PointerToRawData, 
             "raw_size": section.SizeOfRawData,
             "permissions": perms,
             "entropy": round(calculate_entropy(section.get_data()), 3),
@@ -106,6 +107,7 @@ def get_imports(pe):
 STANDARD_SECTIONS = {
     ".text", ".data", ".rdata", ".pdata", ".xdata", ".idata", ".edata",
     ".rsrc", ".reloc", ".bss", ".tls", ".didat", "_rdata", ".crt",
+    ".imrsiv", "fothk", 
 }
 HIGH_ENTROPY = 7.2
 MIN_IMPORTS = 5
@@ -189,20 +191,3 @@ def analyze_pe(path):
         result["flags"].append(entry_flag)
     pe.close()
     return result
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
