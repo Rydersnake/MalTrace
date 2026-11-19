@@ -7,7 +7,7 @@ Covers the assignment's ethical requirements:
   * Dry-run mode (preview without reading or writing anything)
   * Kill switch (clean abort on Ctrl+C)
 """
-import argparse
+import argparse            #import
 import sys
 from pathlib import Path
 
@@ -35,7 +35,7 @@ isolated virtual machine.
 def parse_args():
     parser = argparse.ArgumentParser(
         prog="maltrace",
-        description="MalTrace - static PE analyzer with MITRE ATT&CK mapping.",
+        description="MalTrace - static PE analyzer with MITRE ATT&CK mapping.",       #use epilog for --help 
         epilog=(
             "examples:\n"
             "  py main.py --list\n"
@@ -54,8 +54,7 @@ def parse_args():
                         help="check scope and show what would happen, without analysing")
     parser.add_argument("--confirm-authorized", action="store_true",
                         help="confirm you are authorized (skips the typed prompt)")
-    return parser.parse_args()
-
+    return parser.parse_args()           
 
 def show_disclaimer_and_confirm(pre_confirmed=False):
     """Always show the banner. Exit unless the user confirms authorization."""
