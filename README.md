@@ -229,13 +229,13 @@ MalTrace/
 
 The repository's `docs/` folder can contain screenshots of the CLI help, dry run, analysis output, out-of-scope refusal, output restriction, Ctrl+C stop, and calibration results. Example references:
 
-- `<img width="2136" height="652" alt="image" src="https://github.com/user-attachments/assets/d6603556-b190-4840-b09c-e2e4a3ac5c78" />` – command-line help
-- `docs/02_dry_run.png` – disclaimer and dry run
-- `docs/03_analysis.png` – analysis workflow
-- `docs/04_out_of_scope.png` – rejected out-of-scope file
-- `docs/05_output_restricted.png` – output-folder restriction
-- `docs/06_kill_switch.png` – Ctrl+C stop
-- `docs/07_calibration.png` – calibration comparison
+- <img width="1576" height="688" alt="help" src="https://github.com/user-attachments/assets/5cd78e06-68ca-42a8-84e6-f04bea10dc57" /> – command-line help
+- <img width="1832" height="1028" alt="image" src="https://github.com/user-attachments/assets/bcf5a139-e9e0-490c-b57a-dfd9e93e8a35" /> – disclaimer and dry run
+- <img width="1788" height="1438" alt="image" src="https://github.com/user-attachments/assets/b7987a2e-843a-4431-b256-07e24d1d4db0" /> – analysis workflow
+- <img width="1676" height="836" alt="image" src="https://github.com/user-attachments/assets/5bc54645-ad2e-43e0-8838-02a045a10b39" /> – rejected out-of-scope file
+- <img width="1952" height="866" alt="image" src="https://github.com/user-attachments/assets/67795076-9033-4ccc-8bf0-a18871535909" /> – output-folder restriction
+- <img width="1448" height="1198" alt="image" src="https://github.com/user-attachments/assets/c3239f76-75db-4549-8b5b-552b984dee2f" /> – Ctrl+C stop
+- <img width="1664" height="940" alt="image" src="https://github.com/user-attachments/assets/eeada981-4852-4fcb-8a7a-2ebc5758cec4" /> – calibration comparison
 
 ## Contributors, license and references
 
