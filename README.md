@@ -57,16 +57,30 @@ It does not perform dynamic analysis, monitor runtime behaviour, capture network
 
 ```mermaid
 flowchart TD
-    A[Start main.py] --> B[Disclaimer and authorisation]
-    B --> C[Check file and output scope]
-    C --> D{Dry run?}
-    D -- Yes --> E[Show planned analysis and stop]
-    D -- No --> F[PE metadata, hashes and imports]
-    F --> G[Entropy, strings and section context]
-    G --> H[Extract IoCs]
-    H --> I[Map API indicators to MITRE ATT&CK]
-    I --> J[Calculate combined risk assessment]
-    J --> K[Save JSON report]
+    A([py main.py]) --> B["Show disclaimer, ask: authorised? (yes/no)"]
+    B -->|no| X1([Stop])
+    B -->|yes| C{"File is .exe<br>inside samples/ ?"}
+    C -->|no| X2([Refused: out of scope])
+    C -->|yes| D{"Output folder<br>inside project?"}
+    D -->|no| X3([Refused: bad output folder])
+    D -->|yes| E{"--dry-run ?"}
+    E -->|yes| X4([Show plan and stop])
+    E -->|no| F
+ 
+    subgraph Analysis
+        F["1. PE analysis<br>hashes, sections, imports"] --> G["2. Entropy and strings<br>judge high-entropy regions by section"]
+        G --> H["3. IoC extraction<br>unknown vs trusted"]
+        H --> I["4. MITRE mapping<br>APIs and attack chains"]
+        I --> J["5. Combined risk score<br>LOW / MEDIUM / HIGH"]
+    end
+ 
+    J --> K[("output/name_report.json")]
+    K --> L([Done])
+ 
+    KS(["Ctrl+C at any point: clean abort"]) -.-> Analysis
+ 
+    classDef stop fill:#fde2e2,stroke:#c0392b,color:#000
+    class X1,X2,X3,X4 stop
 ```
 
 ## Attack lifecycle and MITRE ATT&CK mapping
