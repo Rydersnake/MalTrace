@@ -1,245 +1,203 @@
 # MalTrace
 
-**Static Binary Analyzer & MITRE ATT&CK Mapper**
+**Static Binary Analyzer + MITRE ATT&CK Mapper**
 
-MalTrace is a Python command-line tool for the static inspection of Windows Portable Executable (PE) files. It collects file hashes and PE metadata, analyses entropy, extracts readable strings and selected indicators of compromise (IoCs), and maps selected Windows API indicators to MITRE ATT&CK techniques. Results are combined into a JSON report for review.
+MalTrace is a Python-based educational tool for performing **static analysis of Windows Portable Executable (PE) files**. It examines file structure, hashes, strings, entropy, indicators of compromise (IoCs), and imported Windows APIs. Selected findings are mapped to relevant MITRE ATT&CK techniques and can be used to produce an explainable risk assessment.
 
-MalTrace is an educational defensive-security project. It reads files as data and is not designed to execute samples. Its findings are indicators for further investigation, not proof that a file is malicious or safe.
+> **Important:** MalTrace reads files for static inspection. It is not a sandbox, antivirus product, or proof that a file is safe or malicious.
 
-> **Safety first:** Analyse only files you own or are explicitly authorised to examine. Do not run unknown samples. Keep samples and reports private; never upload real malware or sensitive investigation material to this public repository.
+## Table of Contents
 
-## At a glance
-
-| Item | Details |
-|---|---|
-| Tool | MalTrace |
-| Category | Defensive cybersecurity – malware static analysis |
-| Input | Windows `.exe` files in the local `samples/` directory |
-| Main entry point | `main.py` |
-| Output | JSON report in `output/` |
-| Main dependency | Python 3 and `pefile` |
-
-## Attack category and scope
-
-MalTrace supports introductory analysis of Windows malware-related artefacts. It looks for static clues associated with:
-
-- Process injection and process hollowing
-- Registry and service-related persistence
-- Debugger evasion and dynamic API resolution
-- Process and system discovery
-- Credential-access and input-capture indicators
-- Network communication and tool-transfer indicators
-
-The tool does **not** execute malware, monitor runtime behaviour, capture network traffic, or provide complete incident-response or sandbox capabilities.
+- [Features](#features)
+- [Attack Category and MITRE ATT&CK Mapping](#attack-category-and-mitre-attck-mapping)
+- [Analysis Workflow](#analysis-workflow)
+- [Project Structure](#project-structure)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Understanding the Results](#understanding-the-results)
+- [Ethical Considerations](#ethical-considerations)
+- [Rules of Engagement (RoE)](#rules-of-engagement-roe)
+- [Responsible Disclosure](#responsible-disclosure)
+- [Legal Disclaimer](#legal-disclaimer)
+- [Limitations](#limitations)
 
 ## Features
 
-| Module | Main functions |
+| Module | Purpose |
 |---|---|
-| `pe_analyzer.py` | Calculates MD5/SHA-1/SHA-256; checks PE format; extracts selected headers, architecture, sections, imports and heuristic flags. |
-| `string_analyzer.py` | Calculates Shannon entropy; extracts ASCII and UTF-16LE strings; identifies high-entropy regions and selected suspicious strings. |
-| `ioc_extractor.py` | Extracts IPv4 addresses, HTTP/HTTPS URLs, domain candidates and hash-shaped strings from extracted text. |
-| `mitre_mapper.py` | Matches selected API names from PE imports and strings; groups findings by tactic; checks configured API combinations; calculates a heuristic score. |
-| `main.py` | Provides the interactive file-selection workflow, combines module results and saves a JSON report. |
+| `pe_analyzer.py` | Validates and inspects PE files; extracts file hashes, headers, architecture, sections, imports, and structural flags. |
+| `string_analyzer.py` | Calculates Shannon entropy, extracts ASCII and UTF-16LE strings, and identifies high-entropy byte regions. |
+| `entropy_context.py` | Relates high-entropy regions to PE sections and classifies them as benign, review, suspicious, or unknown. |
+| `ioc_extractor.py` | Extracts indicators such as IP addresses, URLs, domains, and file hashes from strings. |
+| `mitre_mapper.py` | Detects selected suspicious Windows API imports and string references, then maps findings to possible ATT&CK techniques and attack patterns. |
+| `riskscorer.py` | Combines behavioural, PE/packing, string, network, and cross-module signals into an explainable score from 0 to 100. |
+| `main.py` | Provides the command-line workflow and saves analysis results as a JSON report. |
 
-The string-analysis module applies a 100 MB input-size limit. IoC matches and API matches require review; a match is not automatically a confirmed malicious indicator.
+The `riskscorer.py` and `entropy_context.py` modules provide supporting analysis functions. **In the current public `main.py`, these two modules are not yet called by the main scan workflow.** Their results should only be described as part of the end-to-end output after they have been integrated and tested with the PE section data.
 
-## Analysis workflow
+## Attack Category and MITRE ATT&CK Lifecycle Mapping
+
+MalTrace focuses on **static indicators associated with Windows malware techniques**. It maps selected imported APIs and extracted strings to relevant MITRE ATT&CK Enterprise tactics and techniques.
+
+| Lifecycle area | What MalTrace looks for | Example ATT&CK references |
+|---|---|---|
+| Execution | Process creation and command-execution-related APIs | Native API (T1106); Command and Scripting Interpreter (T1059) |
+| Persistence | Registry and Windows service-related APIs | Registry Run Keys / Startup Folder (T1547.001); Windows Service (T1543.003) |
+| Defense Evasion | Process injection, process hollowing, dynamic API resolution, and debugger-evasion indicators | Process Injection (T1055); Process Hollowing (T1055.012); Debugger Evasion (T1622); Dynamic API Resolution (T1027.007) |
+| Discovery | Process and system-information discovery APIs | Process Discovery (T1057); System Information Discovery (T1082) |
+| Credential Access / Collection | Credential-store and keyboard-monitoring API indicators | Credentials from Password Stores (T1555); Keylogging (T1056.001) |
+| Command and Control / Transfer | Network communication and remote payload-transfer APIs | Application Layer Protocol (T1071); Ingress Tool Transfer (T1105) |
+
+This is a **partial static-analysis mapping**, not a complete attack lifecycle detector. The current rules do not establish Initial Access, observe runtime actions, or prove that a mapped technique was performed. A detected API or string is only an indicator. Review mappings against the official [MITRE ATT&CK website](https://attack.mitre.org/).
+
+## Analysis Workflow
 
 ```mermaid
 flowchart TD
-    A[Run main.py] --> B[Select an EXE from samples/]
-    B --> C[PE analysis: hashes, headers, sections, imports]
-    B --> D[String analysis: entropy and readable strings]
-    D --> E[IoC extraction: IPs, URLs, domains, hashes]
-    C --> F[MITRE ATT&CK mapping]
-    D --> F
-    E --> G[Combine findings]
-    F --> G
+    A[Select a local EXE from samples/] --> B[PE validation, metadata and hashes]
+    B --> C[Entropy analysis and string extraction]
+    C --> D[IoC extraction from strings]
+    B --> E[Inspect imported Windows APIs]
+    D --> F[Combine analysis findings]
+    E --> F
+    F --> G[MITRE ATT&CK mapping and risk assessment]
     G --> H[Save JSON report in output/]
 ```
 
-### MITRE ATT&CK lifecycle mapping
+The workflow describes the intended analysis pipeline. The contextual entropy and combined risk-scoring helpers are currently separate from `main.py` and require integration before their results appear in the normal scan report.
 
-The mapper uses a **selected local subset** of MITRE ATT&CK Enterprise techniques. The examples below describe the areas represented in the rules; coverage is not comprehensive.
-
-| Tactic / behaviour area | Example techniques | Static evidence considered |
-|---|---|---|
-| Execution | Native API (`T1106`); Command and Scripting Interpreter (`T1059`) | Selected process-creation or execution-related API indicators |
-| Persistence | Registry Run Keys / Startup Folder (`T1547.001`); Windows Service (`T1543.003`) | Selected registry- and service-related indicators |
-| Defense Evasion | Process Injection (`T1055`); Process Hollowing (`T1055.012`); Debugger Evasion (`T1622`) | Memory-manipulation and debugger-check API indicators |
-| Stealth / dynamic API resolution | Dynamic API Resolution (`T1027.007`) | `LoadLibrary` and `GetProcAddress`-style indicators |
-| Credential Access / Collection | Credentials from Password Stores (`T1555`); Keylogging (`T1056.001`) | Selected credential and keyboard-hook API indicators |
-| Discovery | Process Discovery (`T1057`); System Information Discovery (`T1082`) | Process-enumeration and system-information API indicators |
-| Command and Control / transfer | Web Protocols (`T1071.001`); Ingress Tool Transfer (`T1105`) | Selected networking and download API indicators |
-
-ATT&CK matches are hypotheses based on static indicators. An imported or referenced API does not prove it was called, and an API combination does not prove that a behaviour occurred in sequence. Verify technique IDs and tactic assignments against the [MITRE ATT&CK knowledge base](https://attack.mitre.org/) before relying on them in a formal assessment.
-
-## Repository structure
+## Project Structure
 
 ```text
 MalTrace/
-├── main.py                 # Interactive workflow and JSON reporting
-├── guardrails.py           # Ethical/scope helper functions
-├── inspect_report.py      # Local JSON report inspection helper
+├── main.py
+├── guardrails.py
+├── inspect_report.py
 ├── README.md
 ├── modules/
-│   ├── __init__.py
 │   ├── pe_analyzer.py
 │   ├── string_analyzer.py
+│   ├── entropy_context.py
 │   ├── ioc_extractor.py
-│   └── mitre_mapper.py
-├── samples/                # Place authorised test EXEs here locally
-└── output/                 # Generated JSON reports
+│   ├── mitre_mapper.py
+│   └── riskscorer.py
+├── samples/
+│   └── README.md
+└── output/
 ```
 
-Do not commit test binaries, real malware, private samples or sensitive reports to the public repository.
+`output/` is used for generated reports. `guardrails.py` contains supporting safety helpers, but the current `main.py` does not call them as part of its scan flow. Keep executable samples and generated reports out of the public repository unless you have verified that they are safe and appropriate to publish.
 
 ## Installation
 
-**Requirements:** Windows, Python 3, Git (or a ZIP download), and the `pefile` package.
+### Requirements
 
-1. Clone the project and enter its directory:
+- Windows (the current workflow analyses Windows PE/EXE files)
+- Python 3
+- `pefile`
+
+### Setup
+
+1. Clone the repository:
 
    ```bash
    git clone https://github.com/Rydersnake/MalTrace.git
+   ```
+
+2. Enter the project directory:
+
+   ```bash
    cd MalTrace
    ```
 
-   Alternatively, download the repository ZIP from GitHub and extract it.
+3. Install the required PE parsing library:
 
-2. Install the PE parsing dependency:
-
-   ```powershell
-   py -m pip install pefile
+   ```bash
+   python -m pip install pefile
    ```
 
-   If `py` is unavailable, use `python -m pip install pefile`.
-
-3. Place an authorised, benign Windows `.exe` test file in the local `samples/` directory. Do not upload the executable to GitHub.
+4. Place a **benign, authorised test `.exe` file** in the local `samples/` directory. Do not commit executable samples to the public repository.
 
 ## Usage
 
-Run the program from the project root:
+Run the command-line tool from the project root:
 
-```powershell
-py main.py
-```
-
-Or:
-
-```powershell
+```bash
 python main.py
 ```
 
-MalTrace lists `.exe` files in `samples/`. Select a file by entering its number:
+MalTrace lists `.exe` files found in `samples/`. Select a file by entering its displayed number. The current main workflow performs PE analysis, string/entropy analysis, IoC extraction, and MITRE API analysis, then writes a JSON report to `output/`.
+
+Example output structure:
 
 ```text
-========================================
-             MALTRACE
-      Static Binary Analyzer
-       MITRE ATT&CK Mapper
-========================================
-
-Available files:
-1. sample.exe
-
-Select a file to analyse:
+MalTrace/
+├── samples/
+│   └── example.exe          # local test file; do not publish
+└── output/
+    └── example_report.json  # generated report
 ```
 
-After selection, the tool performs PE analysis, entropy and string analysis, IoC extraction, and MITRE ATT&CK mapping. The combined report is saved as:
+The exact findings depend on the selected executable. A clean or low-indicator result does not prove that a file is safe.
 
-```text
-output/sample_report.json
-```
+## Understanding the Results
 
-Open the JSON file in VS Code or another text editor to review the results. The report contains `pe_analysis`, `string_analysis`, `ioc_analysis` and `mitre_analysis` sections.
+- **Hashes:** MD5, SHA-1, and SHA-256 identifiers for the analysed file.
+- **PE information:** File architecture, headers, sections, imports, and structural flags.
+- **Entropy:** A statistical measure of byte distribution. High entropy may be caused by packing, compression, encryption, or legitimate embedded resources.
+- **Strings and IoCs:** Readable text and possible network or file indicators extracted from the binary.
+- **MITRE findings:** Possible ATT&CK technique associations inferred from selected API imports and strings.
+- **Risk score:** An explainable heuristic estimate from several evidence categories. It is not a malware probability or a definitive verdict.
 
-The optional `inspect_report.py` helper currently reads `output/notepad_report.json`. Edit its `report_path` value before using it with a differently named report, then run:
+## Ethical Considerations
 
-```powershell
-py inspect_report.py
-```
+MalTrace is intended for cybersecurity education, authorised defensive analysis, and controlled laboratory use. Users must:
 
-## Understanding results
+- Analyse only files they own or are explicitly authorised to examine.
+- Use benign test files for routine development and demonstrations.
+- Keep suspicious samples in an isolated, access-controlled analysis environment.
+- Never execute an unknown sample on a normal workstation as part of this static-analysis workflow.
+- Protect confidential files, personal data, and any extracted indicators.
+- Avoid publishing live malware, private data, credentials, or sensitive findings in this public repository.
 
-- **Hashes** identify the exact file contents; they do not establish whether a file is malicious.
-- **Entropy** can indicate compression, encryption or packing, but legitimate files can also have high entropy.
-- **IoCs** are extracted candidates and may include false positives or benign values.
-- **API matches** show that an API name was imported or found in strings; they do not show that it executed.
-- **MITRE score and level** are heuristic outputs from local rules, not a malware probability or validated severity rating.
+## Rules of Engagement (RoE)
 
-Review the underlying evidence and corroborate findings with trusted sources and appropriate analysis tools. A low score does not prove a file is safe; a high score does not prove it is malicious.
+Before an assessment, define and follow these rules:
 
-## Ethical considerations
+1. **Authorisation:** Obtain written permission from the file owner or responsible organisation.
+2. **Scope:** Limit analysis to the specific files and systems approved for the assessment.
+3. **Method:** Use static inspection only. Do not execute samples, establish network connections, alter target systems, or attempt persistence.
+4. **Environment:** Store potentially harmful files in a controlled, isolated location with restricted access.
+5. **Data handling:** Record hashes and findings securely; do not redistribute samples or confidential information without permission.
+6. **Stop condition:** Stop analysis if the file is outside the approved scope, the environment becomes unsafe, or authorisation is withdrawn.
+7. **Reporting:** Document evidence, uncertainty, false-positive possibilities, and the limits of the analysis.
 
-MalTrace must be used only for education, defensive analysis and other explicitly authorised purposes.
+## Responsible Disclosure
 
-1. **Authorisation:** Obtain permission from the file owner, lecturer, supervisor or organisation before analysing non-public files.
-2. **Defined scope:** Analyse only approved files placed in the local `samples/` directory. Do not use extracted indicators to probe third-party systems.
-3. **Static-only handling:** MalTrace is intended to read file data; do not execute or detonate samples during this workflow.
-4. **Safe environment:** Treat unknown files as potentially harmful. Use an isolated, appropriately configured analysis VM where necessary.
-5. **Privacy:** Keep samples and reports local. Do not publish credentials, personal data, internal paths, private indicators or confidential findings.
-6. **Accurate reporting:** Describe results as indicators requiring validation, not definitive malware verdicts.
+If analysis reveals a previously unknown vulnerability or security issue:
 
-### Rules of Engagement (RoE)
+1. Do not exploit it beyond what is necessary to validate the finding within the authorised scope.
+2. Preserve relevant evidence without exposing personal or confidential information.
+3. Report the issue privately to the affected vendor, owner, or designated security contact.
+4. Provide a clear description, affected component, impact, reproducible evidence where safe, and suggested mitigation.
+5. Allow the recipient reasonable time to investigate and address the issue before public disclosure.
 
-Before analysis, agree and document the following:
+## Legal Disclaimer
 
-- **Permission and purpose:** Identify who authorised the work, why the sample is being analysed, and who may access the results.
-- **Scope:** Limit input to approved Windows `.exe` files in the local `samples/` directory. No network, website, cloud or third-party infrastructure scanning is authorised by this project.
-- **Permitted actions:** Read the file, calculate hashes and entropy, extract strings and candidate IoCs, inspect PE metadata/imports, apply local ATT&CK rules, and save a local JSON report.
-- **Prohibited actions:** Do not execute samples, attempt access to external systems, deploy extracted code, evade security controls, collect credentials, or redistribute malware.
-- **Stop conditions:** Stop if authorisation is unclear or withdrawn, the sample is out of scope, sensitive information is exposed, or the environment behaves unexpectedly.
-- **Evidence handling:** Preserve the original sample; record its SHA-256 hash and keep reports in approved storage.
-
-**Implementation note:** `guardrails.py` contains helper functions for consent, path restrictions, output checks, dry-run handling and interruption handling. In the current implementation, `main.py` does not import or invoke these helpers. Therefore, those checks are not automatically enforced by running `main.py`; users must follow the RoE manually until the helpers are integrated and tested.
-
-### Responsible disclosure
-
-If analysis suggests a concern involving a real organisation, product or third-party environment:
-
-1. Do not access or test the suspected system based only on an extracted indicator.
-2. Preserve only the minimum evidence needed, such as the sample hash and relevant static findings.
-3. Do not publish personal data, credentials, private infrastructure details or unverified allegations.
-4. Report the concern privately to the organisation's security contact, vendor security team or an appropriate incident-response channel.
-5. Follow the recipient's coordinated disclosure process and share information only when authorised.
-
-MalTrace does not submit findings to external organisations or services. Disclosure is a human-led process.
-
-### Legal disclaimer
-
-MalTrace is provided for educational and authorised defensive-security purposes only. Users are responsible for complying with all applicable laws, regulations, institutional policies, contracts and permission requirements. Nothing in this README is legal advice. The project authors do not authorise unlawful use. The software and its findings are provided on a best-effort basis without a guarantee of accuracy, completeness or suitability for a particular decision. Users are responsible for how they use the tool and handle analysed files.
+MalTrace is provided for educational and authorised defensive security purposes only. Users are responsible for ensuring that their use complies with applicable laws, regulations, institutional policies, and the terms governing the files they analyse, including relevant Malaysian cybercrime laws such as the **Computer Crimes Act 1997**. The project authors do not authorise unauthorised access, malware deployment, disruption, or unlawful handling of data. This README is not legal advice.
 
 ## Limitations
 
-- The interactive workflow is focused on Windows `.exe` PE files; it is not a general analyser for ELF, Mach-O, scripts or documents.
-- Static analysis cannot observe runtime behaviour, memory activity, network traffic or actual API execution.
-- ATT&CK coverage is limited to the techniques represented in the local rule database.
-- API, string, entropy and IoC heuristics can produce false positives and false negatives.
-- Packing, obfuscation, encryption and unusual PE structures may hide relevant information.
-- The main workflow reports IPv4 addresses, URLs, domain candidates and hash-shaped strings; other IoC types may not be included in the combined report.
-- The string analyser refuses files larger than 100 MB.
-- MalTrace does not query external reputation services or threat-intelligence feeds.
-- The current main program generates JSON reports; it does not automatically create HTML or PDF reports.
-- The `guardrails.py` helpers are not yet connected to `main.py` (see the implementation note above).
-
-## Troubleshooting
-
-| Problem | Suggested action |
-|---|---|
-| `ModuleNotFoundError: pefile` | Run `py -m pip install pefile`. |
-| No EXE files found | Confirm `samples/` exists and contains an authorised `.exe`; run from the project root. |
-| Invalid PE file | Check that the file is a valid, supported Windows executable and is not damaged. |
-| No report appears | Check that analysis completed and that the project `output/` directory is writable. |
-
-## References
-
-- [MalTrace repository](https://github.com/Rydersnake/MalTrace)
-- [MITRE ATT&CK Enterprise](https://attack.mitre.org/)
-- [Python documentation](https://docs.python.org/3/)
-- [pefile on PyPI](https://pypi.org/project/pefile/)
+- MalTrace performs static analysis; it does not observe runtime behaviour or execute files in a sandbox.
+- API imports and strings can be present in legitimate software and may produce false positives.
+- Dynamically resolved, encrypted, obfuscated, or packed behaviour may not be visible to static inspection.
+- Entropy alone cannot distinguish malicious packing from legitimate compression or resources.
+- IoC extraction is pattern-based and may miss indicators or identify false positives.
+- MITRE ATT&CK mappings are heuristic associations, not proof that a technique was performed.
+- Risk scores are rule-based estimates and must be interpreted with the evidence and notes, not as a malware probability.
+- `entropy_context.py` and `riskscorer.py` are present as supporting modules, but their results are not yet included in the current `main.py` scan output. The PE section data must also include raw file offsets for entropy regions to be mapped to sections correctly.
+- `guardrails.py` is present, but its helper controls are not currently invoked by `main.py`; users must follow the Rules of Engagement in this README independently.
 
 ---
 
-**Project status:** MalTrace is an academic prototype. Review the code, test the analysis rules and integrate the ethical guardrails before using it beyond a controlled educational exercise.
+**Project:** MalTrace — Static Binary Analyzer + MITRE ATT&CK Mapper  
