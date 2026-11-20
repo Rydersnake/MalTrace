@@ -229,7 +229,7 @@ MalTrace/
 
 The repository's `docs/` folder can contain screenshots of the CLI help, dry run, analysis output, out-of-scope refusal, output restriction, Ctrl+C stop, and calibration results. Example references:
 
-- `docs/01_help.png` – command-line help
+- `<img width="2136" height="652" alt="image" src="https://github.com/user-attachments/assets/d6603556-b190-4840-b09c-e2e4a3ac5c78" />` – command-line help
 - `docs/02_dry_run.png` – disclaimer and dry run
 - `docs/03_analysis.png` – analysis workflow
 - `docs/04_out_of_scope.png` – rejected out-of-scope file
