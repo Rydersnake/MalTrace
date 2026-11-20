@@ -1,4 +1,4 @@
-""entropy_context.py - give high-entropy regions a meaning.
+"""entropy_context.py - give high-entropy regions a meaning.
 
 string_analyzer finds high-entropy byte ranges anywhere in the file.
 That alone is misleading: a range inside .rsrc (icons, compressed
